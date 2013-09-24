@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<style>
+			html {
+				background: black;
+				color: white;
+			}
+			
+			label {
+				color: gray;
+			}
+		</style>
+		<script>
+			var empty = "#444";
+			var rainbow = ["#F00", "#F80", "#0F0", "#0F8", "#00F", "#80F", "#F0F"];
+			var shapes = [
+				[ [-1,0], [0,0], [1,0],[-2,0]],				// I
+				[[-1,-1],[-1,0], [0,0],[1,0]],				// J
+				[ [1,-1],[-1,0], [0,0],[1,0]],				// L
+				[[-1,0],  [0,0],[-1,1],[0,1]],				// O
+				[[1,0],  [0,0],[-1,1],[0,1]],				// S
+				[ [0,-1],[-1,0], [0,0],[1,0]],				// T
+				[[-1,0],  [0,0],[1,1],[0,1]],				// Z
+			];
+
+
+			function Board(width, height, canvas, preview) {
+				this.width = width;
+				this.height = height;
+				
+				this.fallrate = 800; 
+								
+				this.cleared = 0;
+								
+				this.canvas = document.getElementById(canvas);
+				this.context = this.canvas.getContext("2d");
+				
+				this.preview = document.getElementById(preview);
+				this.pContext = this.preview.getContext("2d");
+				
+				// Initialize board
+				this.board = new Array();
+				for (var i = 0; i < width; i++) {
+					this.board[i] = new Array();
+					for (var j = -5; j < height; j++) {
+						this.board[i][j] = empty;
+					}
+				}
+				
+				this.drawBlock = function (i, j, color) {
+					this.board[i][j] = color;
+					var blockWidth = this.canvas.width/this.width;
+					var blockHeight = this.canvas.height/this.height;
+					var x = i * blockWidth;
+					var y = j * blockHeight;
+					this.context.strokeStyle = "#444";
+					this.context.fillStyle=color;
+					this.context.fillRect(x, y, blockWidth, blockHeight);
+					this.context.strokeRect(x, y, blockWidth, blockHeight);
+					//this.context.strokeText(i + "," + j, x + 2, y + 10);
+				}
+				
+				this.drawPreviewBlock = function (i, j, color) {
+					//alert("Drawing Preview Block " + i + " x " + j);
+					var blockWidth = this.preview.width/4;
+					var blockHeight = this.preview.height/4;
+					var x = i * blockWidth;
+					var y = j * blockHeight;
+					this.pContext.strokeStyle = "#444";
+					this.pContext.fillStyle=color;
+					this.pContext.fillRect(x, y, blockWidth, blockHeight);
+					this.pContext.strokeRect(x, y, blockWidth, blockHeight);
+					//this.context.strokeText(i + "," + j, x + 2, y + 10);
+				}
+				
+				this.showPreview = function () {
+					this.pContext.fillStyle = empty;
+					this.pContext.fillRect(0, 0, this.preview.width, this.preview.height);
+
+					for (var i in this.nextPiece.shape) {
+						this.drawPreviewBlock(this.nextPiece.shape[i][0] + 1, this.nextPiece.shape[i][1] + 1, this.nextPiece.color);
+					}
+				}
+				
+				this.draw = function () {
+					for (var i = 0; i < width; i++) {
+						for (var j = 0; j < height; j++) {
+							this.drawBlock(i, j, this.board[i][j]);							
+						}
+					}
+				}
+				
+				this.nextPiece = new Piece(this, Math.floor((Math.random()*(shapes.length))));
+				
+				this.dropNextPiece = function () {
+					this.currentPiece = this.nextPiece;
+					this.currentPiece.drop(); 
+					this.nextPiece = new Piece(this, Math.floor((Math.random()*(shapes.length))));
+					this.showPreview();
+				}
+				
+				var self = this;
+				
+				window.onkeydown = function (e) {
+					switch (e.keyCode) {
+						case 37:
+							self.currentPiece.moveLateral(-1);
+							break;
+						case 38:
+							//self.currentPiece.erase();
+							self.currentPiece.flip();
+							break;
+						case 39:
+							self.currentPiece.moveLateral(1);
+							break;
+						case 40:
+							self.currentPiece.fall();
+							self.currentPiece.softdrop += 1;
+							break;
+						default:
+//							alert(e.keyCode);
+					}
+				}
+				
+				this.isClear = function (x, y) {
+					
+					if (x < 0) {
+						// All the way left
+						return false;
+					}
+						
+					if (x >= this.width) {
+						// All the way right
+						return false;
+					}
+					
+					if (y >= this.height) {
+						// All the way to the floor
+						return false;
+					}
+					
+					if (y > 0) {
+						if (this.board[x][y] != empty) {
+							
+							// Hit another block
+							return false;
+						}
+					}
+					return true;
+				}
+				
+				this.isFilled = function (line) {
+					for (var i = 0; i < this.width; i++) {
+						if (this.board[i][line] == empty) {
+							return false;
+						}
+						//this.drawBlock(i, line, "#FFF");
+					}
+					return true;
+				}
+				
+				this.eraseLine = function (line) {
+					
+					for (var j = line - 1; j > 0; j--) {
+						for (var i = 0; i < this.width; i++) {
+							this.board[i][j+1] = this.board[i][j];
+							this.drawBlock(i, j+1, this.board[i][j]);
+						}
+					}
+				}
+				
+				this.levelUp = function () {
+					// Level up
+					if (this.fallrate - 100 > 0) {
+						this.fallrate -= 100;
+					}
+					var level = document.getElementById("level");
+					level.innerHTML = Number(level.innerHTML)+1;
+				}
+
+				this.scanBoard = function () {
+					var cleared = 0;
+					var score = document.getElementById("score");
+										
+					for (var j = 0; j < this.height; j++) {
+						if (this.isFilled(j)) {
+							this.eraseLine(j);
+							cleared++;
+							this.cleared++;
+							if (0 == (this.cleared % 10)) {
+								this.levelUp();
+							}
+						}
+					}
+					
+					var level = Number(document.getElementById("level").innerHTML);
+					var points = 0;
+					
+					switch(cleared) {
+						case 4: points = 1200*level; break;
+						case 3: points = 300*level; break;
+						case 2: points = 100*level; break;
+						case 1: points = 40*level; break;
+					}
+					
+					score.innerHTML = Number(score.innerHTML)+points+this.currentPiece.softdrop;	
+				}
+				
+				this.draw();
+			}
+			
+			
+			function Piece(board, shape) {
+				this.board = board;
+				this.transform = [1, -1];
+				
+				this.shape = shapes[shape];
+				this.color = rainbow[shape];
+				
+				this.x = 4;
+				this.y = -2;
+				
+				this.fallrate = this.board.fallrate;
+				this.softdrop = 0;
+				
+				var self = this;
+				
+				this.moveLateral = function (direction) {
+					this.pseudoerase();
+					if (this.clearAfter(direction, 0)) {
+						this.erase();
+						this.x += direction;
+					}					
+					this.draw();
+				}
+				
+				
+				this.isAboveBoard = function () {
+					for (var i in this.shape) {
+						if (this.y + this.shape[i][1] < 0) 
+							return true;
+					}
+					return false;
+				}
+				
+				this.fall = function () {
+					self.erase();
+					if (!self.clearAfter(0,1)) {
+						clearTimeout(self.falling);
+						self.draw();
+						self.board.scanBoard();
+						if (self.isAboveBoard()) {
+							var level = document.getElementById("level");
+							level.innerHTML = level.innerHTML + "(Game over)";
+							window.onkeydown = null;
+						} else {
+							self.board.dropNextPiece();
+						}
+					} else {
+						self.y++;
+						self.draw();
+					}
+				}
+				
+				this.drop = function () {
+					this.falling = setInterval(this.fall, this.fallrate);
+				}
+
+				this.clearAfter = function (dx, dy) {
+					for (var i in this.shape) {
+						var coords = this.shape[i];
+						if (!this.board.isClear(coords[0] + this.x + dx, coords[1] + this.y + dy)) {
+							return false;
+						}
+					}
+					return true;
+				}
+
+				this.draw = function () {
+					var r = 0;
+					for (var i in this.shape) {
+						var coords = this.shape[i];
+						this.board.drawBlock(this.x + coords[0], this.y + coords[1], this.color);
+					}
+				}
+				
+				this.erase = function () {
+					var r = 0;
+					for (var i in this.shape) {
+						var coords = this.shape[i];
+						this.board.drawBlock(this.x + coords[0], this.y + coords[1], empty);
+					}
+				}
+
+				this.pseudoerase = function () {
+					var r = 0;
+					for (var i in this.shape) {
+						var coords = this.shape[i];
+						this.board.board[this.x + coords[0]][this.y + coords[1]] = empty;
+					}
+				}
+				
+				this.flip = function () {
+					this.erase();
+					var canRotate = true;
+					var newShape = this.shape;
+					for (var i in this.shape) {
+						newShape[i] = [this.shape[i][1], -(this.shape[i][0])];
+						if (!this.board.isClear(newShape[i][0] + this.x, newShape[i][1] + this.y)) {
+							//this.erase();
+							this.draw();
+							return false;
+						}
+						
+					}
+					//this.erase();
+					this.shape = newShape;
+					this.draw();
+					return true;
+				}				
+			}
+		</script>
+	</head>
+	<body>
+		<canvas id="board" width="200" height="400" style="border:1px solid #000000;"></canvas>
+		<div style="float:left">
+			<div>
+				<label for="score">Score:</label>
+				<div id="score">0</div>
+			</div>
+			<div>
+				<label for="level">Level:</label>
+				<div id="level">1</div>
+			</div>
+
+			<canvas id="next" width="100" height="100" style="border:1px solid #000000;"></canvas>
+		</div>
+		<script>
+			var board = new Board(10, 20, "board", "next");
+			//board.fallrate = board.currentPiece.fallrate = 500;
+			board.dropNextPiece();
+		</script>
+	</body>
+</html>
